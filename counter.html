@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ml"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Temple Management - Vazhivad</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:15px/1.4 "Noto Sans Malayalam",system-ui,sans-serif;background:#fdf6ec;color:#3b2a1a}
+header{background:#8a2b0f;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+header b{font-size:18px}.badge{padding:2px 8px;border-radius:10px;font-size:12px;background:#2e7d32}.badge.off{background:#b71c1c}
+nav{display:flex;gap:4px;padding:8px 16px 0;flex-wrap:wrap;border-bottom:2px solid #8a2b0f}
+nav button{border:0;background:#f0dcc0;padding:9px 14px;border-radius:8px 8px 0 0;cursor:pointer;font:inherit}
+nav button.on{background:#8a2b0f;color:#fff}
+main{padding:16px;max-width:1000px;margin:auto}.card{background:#fff;border:1px solid #e3cfb0;border-radius:10px;padding:14px;margin-bottom:14px}
+input,select,textarea{font:inherit;padding:7px;border:1px solid #c9ae88;border-radius:6px;background:#fff;color:inherit;max-width:100%}
+button.b{background:#8a2b0f;color:#fff;border:0;padding:9px 16px;border-radius:7px;cursor:pointer;font:inherit}button.b.g{background:#777}button.b.s{padding:4px 9px}
+table{width:100%;border-collapse:collapse}th,td{border:1px solid #e3cfb0;padding:5px;text-align:left}th{background:#f6e7cf}
+td input,td select{width:100%}.row{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.tot{font-size:20px;font-weight:700;text-align:right;margin:10px 0}.fm label{display:block;margin:8px 0 2px;font-weight:600}.fm input,.fm select{width:100%;max-width:420px}
+#modal{position:fixed;inset:0;background:#0008;display:none;align-items:center;justify-content:center;z-index:9}#modal div{background:#fff;padding:22px;border-radius:12px;text-align:center;max-width:90%}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}.cal>div{border:1px solid #e3cfb0;border-radius:6px;padding:3px;min-height:66px;font-size:11px;cursor:pointer;position:relative;background:#fff}.cal .h{background:#f6e7cf;min-height:0;text-align:center;font-weight:700;cursor:default}.cal .t{border:2px solid #8a2b0f}.cal .sel{background:#ffe9b8}.cal .ct{position:absolute;top:2px;right:3px;background:#8a2b0f;color:#fff;border-radius:9px;padding:0 6px;font-style:normal}
+#printArea{display:none}
+@media print{body>*:not(#printArea){display:none!important}#printArea{display:block}}
+</style><style id="pg"></style><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body><div id="app"></div><div id="modal"><div id="mbox"></div></div><div id="printArea"></div>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const DB={get(k,d){try{const v=localStorage.getItem('tm_'+k);return v?JSON.parse(v):d}catch(e){return d}},set(k,v){try{localStorage.setItem('tm_'+k,JSON.stringify(v))}catch(e){alert('Storage error')}}};
+const S={ctr:null,user:null,view:'normal'},NAMES={normal:'Normal Vazhivad',daily:'Daily Pooja',special:'Special Days Vazhivad'},PRE={normal:'V',daily:'D',special:'S'};
+const NAK=['അശ്വതി','ഭരണി','കാർത്തിക','രോഹിണി','മകയിരം','തിരുവാതിര','പുണർതം','പൂയം','ആയില്യം','മകം','പൂരം','ഉത്രം','അത്തം','ചിത്തിര','ചോതി','വിശാഖം','അനിഴം','തൃക്കേട്ട','മൂലം','പൂരാടം','ഉത്രാടം','തിരുവോണം','അവിട്ടം','ചതയം','പൂരുരുട്ടാതി','ഉത്രട്ടാതി','രേവതി'];
+const cfg=()=>DB.get('cfg'),items=()=>DB.get('items',[]),bills=()=>DB.get('bills',[]);
+
+/* ---- Manglish -> Malayalam ---- */
+const VW={aa:['ആ','ാ'],ai:['ഐ','ൈ'],au:['ഔ','ൗ'],ee:['ഈ','ീ'],ii:['ഈ','ീ'],oo:['ഊ','ൂ'],uu:['ഊ','ൂ'],a:['അ',''],e:['എ','െ'],i:['ഇ','ി'],o:['ഒ','ൊ'],u:['ഉ','ു'],A:['ആ','ാ'],E:['ഏ','േ'],I:['ഈ','ീ'],O:['ഓ','ോ'],U:['ഊ','ൂ']};
+const CN={chh:'ഛ',kh:'ഖ',gh:'ഘ',ng:'ങ',ch:'ച',jh:'ഝ',nj:'ഞ',Th:'ഠ',Dh:'ഢ',th:'ത',dh:'ധ',ph:'ഫ',bh:'ഭ',sh:'ശ',zh:'ഴ',k:'ക',g:'ഗ',c:'ച',j:'ജ',T:'ട',D:'ഡ',N:'ണ',t:'ട',d:'ദ',n:'ന',p:'പ',f:'ഫ',b:'ബ',m:'മ',y:'യ',r:'ര',l:'ല',v:'വ',w:'വ',S:'ഷ',s:'സ',h:'ഹ',L:'ള',R:'റ',z:'ഴ'};
+const CHL={'ന':'ൻ','ര':'ർ','ല':'ൽ','ള':'ൾ','ണ':'ൺ','മ':'ം'};
+function ml(s){let o='',pc=null;const end=()=>{if(pc){o+=CHL[pc]||pc+'്';pc=null}};
+for(let i=0;i<s.length;){let m=null,l=0;
+for(l=3;l>=1&&!m;l--){const x=s.substr(i,l);if(x.length<l)continue;if(VW[x])m=['v',VW[x]];else if(CN[x])m=['c',CN[x]];else if(l==1&&CN[x.toLowerCase()]&&x!=='M'&&x!=='H')m=['c',CN[x.toLowerCase()]];}
+l++;
+if(!m){const ch=s[i];if(ch==='M'){end();o+='ം'}else if(ch==='H'){end();o+='ഃ'}else{end();o+=ch}i++;continue}
+if(m[0]==='v'){if(pc){o+=pc+m[1][1];pc=null}else o+=m[1][0]}else{if(pc)o+=pc+'്';pc=m[1]}
+i+=l}
+end();return o}
+function mlInput(inp){inp.autocomplete='off';inp.addEventListener('beforeinput',e=>{const on=$('#mlOn');if(!on||!on.checked)return;let r=inp.dataset.raw||'';
+if(e.inputType==='insertText'&&e.data)r+=e.data;else if(e.inputType==='deleteContentBackward'){r=(inp.selectionStart===0&&inp.selectionEnd===inp.value.length)?'':r.slice(0,-1)}else return;
+e.preventDefault();inp.dataset.raw=r;inp.value=ml(r)});}
+
+/* ---- App shell ---- */
+function app(){if(!cfg())return setup();if(!S.user)return login();shell()}
+function setup(){$('#app').innerHTML=`<main><div class=card><h2>🛕 Installation Setup</h2><div class=fm>
+<label>Temple name</label><input id=t value="ശ്രീ ക്ഷേത്രം"><label>Address</label><input id=a><label>Phone</label><input id=ph>
+<label>Receipt paper size</label><select id=p><option value=58>Thermal 58mm</option><option value=80 selected>Thermal 80mm</option><option value=A5>A5</option><option value=A4>A4</option></select>
+<label>Admin password</label><input id=ap value="admin123"><label>Staff password</label><input id=sp value="staff123"></div><br>
+<button class=b onclick="doSetup()">Finish Setup</button></div></main>`}
+function doSetup(){DB.set('cfg',{temple:$('#t').value,addr:$('#a').value,phone:$('#ph').value,footer:'ഭഗവാൻ അനുഗ്രഹിക്കട്ടെ',paper:$('#p').value,fs:13,pw:{admin:$('#ap').value,staff:$('#sp').value},cnt:{normal:0,daily:0,special:0}});
+DB.set('nak',NAK);DB.set('items',[{id:1,name:'പുഷ്പാഞ്ജലി',price:20,cat:'normal'},{id:2,name:'അർച്ചന',price:10,cat:'normal'},{id:3,name:'നെയ്‌വിളക്ക്',price:30,cat:'normal'},{id:4,name:'ഗണപതിഹോമം',price:50,cat:'daily'},{id:5,name:'ഭഗവതിസേവ',price:150,cat:'special'}]);app()}
+function login(){$('#app').innerHTML=`<main><div class="card fm" style="max-width:380px;margin:40px auto"><h2>${esc(cfg().temple)}</h2><label>Counter number (or admin)</label><input id=u><label>Password</label><input type=password id=pw onkeydown="if(event.key=='Enter')doLogin()"><br><br><button class=b onclick="doLogin()">Login</button></div></main>`}
+function shell(){const adm=S.user==='admin',tabs=[['normal','Normal Vazhivad'],['daily','Daily Pooja'],['special','Special Days Vazhivad']];if(canOnline())tabs.push(['online','Online Requests']);if(!adm)tabs.push(['bills','My Bills']);
+if(adm)tabs.push(['bills','Bills'],['counters','Counters'],['items','Vazhivad Items'],['nak','Nakshatram'],['settings','Settings']);
+$('#app').innerHTML=`<header><b>🛕 ${esc(cfg().temple)}</b><span><span class="badge" id=net></span> ${S.ctr?'Counter '+esc(S.ctr.no)+' · '+esc(S.ctr.name)+' ('+S.ctr.mode+')':'ADMIN'} <button class="b s g" onclick="S.user=null;app()">Logout</button></span></header>
+<nav>${tabs.map(t=>`<button class="${S.view==t[0]?'on':''}" onclick="S.view='${t[0]}';shell()">${t[1]}${t[0]=='online'?' <b id=ob></b>':''}</button>`).join('')}</nav><main id=main></main>`;
+net();ob();({online:onlineView,counters:countersView,bills:billsView,items:itemsView,nak:nakView,settings:settingsView,daily:dailyView}[S.view]||(()=>billView(S.view)))()}
+function net(){const b=$('#net');if(b){b.textContent=navigator.onLine?'Online':'Offline';b.className='badge'+(navigator.onLine?'':' off')}}
+addEventListener('online',net);addEventListener('offline',net);
+
+/* ---- Vazhivad bill ---- */
+let clk;
+function billView(t){const c=cfg(),no=PRE[t]+String(c.cnt[t]+1).padStart(4,'0'),d=td();
+$('#main').innerHTML=`<div class=card><h3>${NAMES[t]}</h3><div class=row><span>Receipt No: <b>${no}</b></span><span>Date: <input type=date id=bd value="${d}"></span><span>Time: <b id=clk></b></span>
+<label><input type=checkbox id=mlOn checked> മലയാളം (Manglish typing)</label></div>
+${t==='special'?'<div class=row><span>Occasion / Special day: <input id=occ></span></div>':''}
+<div style="overflow-x:auto"><table><thead><tr><th width=40>Sl.No</th><th>Name</th><th>Nakshatram</th><th>Vazhivad</th><th width=80>Price</th><th width=30></th></tr></thead><tbody id=bb></tbody></table></div>
+<p><button class="b s" onclick="addRow('${t}')">+ Add row</button></p><div class=tot>Total: ₹<span id=tt>0</span></div>
+<div class=row>Payment: <label><input type=radio name=pay value=Cash checked> Cash</label><label><input type=radio name=pay value=UPI> UPI</label></div>
+<button class=b onclick="saveBill('${t}')">Submit &amp; Save</button> <button class="b g" onclick="billView('${t}')">Clear</button></div>`;
+clearInterval(clk);const tick=()=>{const e=$('#clk');if(e)e.textContent=new Date().toLocaleTimeString()};tick();clk=setInterval(tick,1000);addRow(t)}
+function addRow(t){const tr=document.createElement('tr'),its=items().filter(i=>i.cat===t);
+tr.innerHTML=`<td class=sl></td><td><input class=nm></td><td><select class=nk><option value="">--</option>${DB.get('nak',NAK).map(n=>`<option>${esc(n)}</option>`).join('')}</select></td>
+<td><select class=it><option value="">--</option>${its.map(i=>`<option value="${i.id}" data-p="${i.price}">${esc(i.name)}</option>`).join('')}</select></td><td class=pr>0</td><td><button class="b s g" tabindex=-1>×</button></td>`;
+$('#bb').appendChild(tr);mlInput(tr.querySelector('.nm'));
+tr.querySelector('.it').onchange=e=>{tr.querySelector('.pr').textContent=e.target.selectedOptions[0].dataset.p||0;sum()};
+tr.querySelector('button').onclick=()=>{if($('#bb').children.length>1){tr.remove();sum()}};sum();tr.querySelector('.nm').focus()}
+function sum(){let t=0,n=1;document.querySelectorAll('#bb tr').forEach(r=>{r.querySelector('.sl').textContent=n++;t+=+r.querySelector('.pr').textContent});$('#tt').textContent=t}
+function saveBill(t){const rows=[];for(const r of document.querySelectorAll('#bb tr')){const nm=r.querySelector('.nm').value.trim(),it=r.querySelector('.it'),id=it.value;
+if(!nm&&!id)continue;if(!nm||!id){alert('Enter name and select vazhivad in every row');return}
+rows.push({name:nm,nak:r.querySelector('.nk').value,item:it.selectedOptions[0].textContent,price:+it.selectedOptions[0].dataset.p})}
+if(!rows.length){alert('Add at least one entry');return}
+const c=cfg();c.cnt[t]++;DB.set('cfg',c);const now=new Date(),b={no:PRE[t]+String(c.cnt[t]).padStart(4,'0'),type:t,date:$('#bd').value,time:now.toLocaleTimeString(),occ:$('#occ')?$('#occ').value:'',rows,total:rows.reduce((a,r)=>a+r.price,0),pay:document.querySelector('[name=pay]:checked').value,by:S.user,...ctrF(),synced:false};
+const all=bills();all.push(b);DB.set('bills',all);
+$('#mbox').innerHTML=`<h3>✅ Saved</h3><p>Receipt <b>${b.no}</b> – ₹${b.total} (${b.pay})</p><p>Do you want to print?</p><button class=b onclick="printBill('${b.no}')">🖨 Print</button> <button class="b g" onclick="closeM()">No</button>`;
+$('#modal').style.display='flex';billView(t)}
+function closeM(){$('#modal').style.display='none';$('#mbox').innerHTML=''}
+function printBill(no,cb){closeM();const b=typeof no==='object'?no:bills().find(x=>x.no===no),c=cfg(),th=!isNaN(c.paper),w=th?c.paper+'mm':(c.paper==='A5'?'148mm':'210mm');
+$('#pg').textContent=`@page{size:${th?c.paper+'mm auto':c.paper};margin:3mm}#printArea{width:${w};font-size:${c.fs}px;font-family:"Noto Sans Malayalam",sans-serif;color:#000}#printArea table{width:100%;border-collapse:collapse}#printArea td,#printArea th{border:0;border-bottom:1px dashed #000;padding:2px;font-size:${c.fs}px;background:none}`;
+$('#printArea').innerHTML=`<div style="text-align:center"><b style="font-size:${c.fs+3}px">${esc(c.temple)}</b><br>${esc(c.addr)}<br>${esc(c.phone)}</div><hr>
+<div>Receipt No: <b>${b.no}</b> &nbsp; ${NAMES[b.type]}${b.occ?' – '+esc(b.occ):''}<br>Date: ${b.date} &nbsp; Time: ${b.time}</div>
+<table><tr><th>#</th><th>Name / Nakshatram</th><th>Vazhivad</th><th align=right>₹</th></tr>${b.rows.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.name)}<br><small>${esc(r.nak)}</small></td><td>${esc(r.item)}</td><td align=right>${r.price}</td></tr>`).join('')}</table>
+<p style="text-align:right"><b>Total: ₹${b.total}</b><br>Payment: ${b.pay}</p><div style="text-align:center">${esc(c.footer)}</div>`;setTimeout(()=>{print();cb&&cb()},150)}
+
+/* ---- Admin ---- */
+function itemsView(){const l=items();$('#main').innerHTML=`<div class=card><h3>Vazhivad Items</h3><div class=row><input id=in placeholder="Item name (Malayalam)"><input id=ip type=number placeholder=Price style="width:90px"><select id=ic>${Object.keys(NAMES).map(k=>`<option value=${k}>${NAMES[k]}</option>`).join('')}</select><button class=b onclick="addItem()">Add</button></div>
+<table><tr><th>Name</th><th>Category</th><th>Price</th><th></th></tr>${l.map(i=>`<tr><td>${esc(i.name)}</td><td>${NAMES[i.cat]}</td><td><input type=number value=${i.price} style="width:90px" onchange="upItem(${i.id},this.value)"></td><td><button class="b s g" onclick="delItem(${i.id})">Delete</button></td></tr>`).join('')}</table></div>`;
+const n=$('#in');n.insertAdjacentHTML('afterend','');mlInput(n);const ck=document.createElement('label');ck.innerHTML='<input type=checkbox id=mlOn checked> Manglish';n.parentNode.insertBefore(ck,n)}
+function addItem(){const n=$('#in').value.trim(),p=+$('#ip').value;if(!n||!(p>=0)||$('#ip').value==='')return alert('Enter name and price');const l=items();l.push({id:Date.now(),name:n,price:p,cat:$('#ic').value});DB.set('items',l);itemsView()}
+function upItem(id,v){const l=items();l.find(i=>i.id==id).price=+v;DB.set('items',l)}
+function delItem(id){if(confirm('Delete item?')){DB.set('items',items().filter(i=>i.id!=id));itemsView()}}
+function nakView(){$('#main').innerHTML=`<div class=card><h3>Nakshatram list</h3><p>One per line</p><textarea id=nk rows=16 style="width:100%;max-width:400px">${esc(DB.get('nak',NAK).join('\n'))}</textarea><br><br><button class=b onclick="DB.set('nak',$('#nk').value.split('\n').map(s=>s.trim()).filter(Boolean));alert('Saved')">Save</button></div>`}
+function settingsView(){const c=cfg();$('#main').innerHTML=`<div class="card fm"><h3>Settings &amp; Print Setup</h3>
+<label>Temple name</label><input id=t value="${esc(c.temple)}"><label>Address</label><input id=a value="${esc(c.addr)}"><label>Phone</label><input id=ph value="${esc(c.phone)}"><label>Footer message</label><input id=f value="${esc(c.footer)}">
+<label>Receipt paper size</label><select id=p>${[['58','Thermal 58mm'],['80','Thermal 80mm'],['A5','A5'],['A4','A4']].map(o=>`<option value=${o[0]} ${o[0]==c.paper?'selected':''}>${o[1]}</option>`).join('')}</select>
+<label>Print font size (px)</label><input id=fs type=number value=${c.fs}><label>Admin password</label><input id=ap value="${esc(c.pw.admin)}">
+<h3>Firebase link (online counters)</h3><label>Firebase staff email</label><input id=wu value="${esc(fbc().email)}"><label>Firebase staff password</label><input id=wk type=password value="${esc(fbc().pass)}"><br><br><button class="b g" type=button onclick="saveCfg();webPush()">Save &amp; send vazhivad list to website</button>
+<h3>WhatsApp receipt</h3><label><input type=checkbox id=wo ${wa().on?'checked':''} style="width:auto"> Enable "Send WhatsApp" option</label><label>Default country code</label><input id=wc value="${esc(wa().cc)}">
+<label>Message ({temple} {receipt} {name} {pdate} {items} {total} {pay} {date} {footer})</label><textarea id=wm rows=7 style="width:100%;max-width:420px">${esc(wa().msg)}</textarea><br><br>
+<button class=b onclick="saveCfg()">Save</button> <button class="b g" onclick="backup()">⬇ Backup data</button></div>`}
+function saveCfg(){const c=cfg();Object.assign(c,{temple:$('#t').value,addr:$('#a').value,phone:$('#ph').value,footer:$('#f').value,paper:$('#p').value,fs:+$('#fs').value||13,pw:{admin:$('#ap').value,staff:c.pw.staff},fb:{email:$('#wu').value.trim(),pass:$('#wk').value},wa:{on:$('#wo').checked,cc:$('#wc').value,msg:$('#wm').value}});DB.set('cfg',c);alert('Saved');shell()}
+function backup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({cfg:cfg(),items:items(),nak:DB.get('nak',[]),bills:bills()})],{type:'application/json'}));a.download='temple-backup-'+td()+'.json';a.click()}
+
+/* ---- Malayalam calendar ---- */
+const rad=Math.PI/180,nm=x=>((x%360)+360)%360,pad=n=>String(n).padStart(2,'0');
+const MM=['മേടം','ഇടവം','മിഥുനം','കർക്കടകം','ചിങ്ങം','കന്നി','തുലാം','വൃശ്ചികം','ധനു','മകരം','കുംഭം','മീനം'],WD=['ഞായർ','തിങ്കൾ','ചൊവ്വ','ബുധൻ','വ്യാഴം','വെള്ളി','ശനി'];
+const td=()=>{const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())};
+const addDays=(iso,n)=>{const d=new Date(iso+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
+function jd(iso,h,mi){const [y,m,d]=iso.split('-').map(Number);return (Date.UTC(y,m-1,d,h,mi)-19800000)/864e5+2440587.5}
+const ayan=J=>23.857+0.013969*((J-2451545)/365.25);
+function sunSid(J){const n=J-2451545,g=(357.528+0.9856003*n)*rad;return nm(280.460+0.9856474*n+1.915*Math.sin(g)+0.020*Math.sin(2*g)-ayan(J))}
+function moonSid(J){const T=(J-2451545)/36525,s=(a,b)=>Math.sin((a+b*T)*rad);return nm(218.32+481267.881*T+6.29*s(135.0,477198.87)-1.27*s(259.3,-413335.36)+0.66*s(235.7,890534.22)+0.21*s(269.9,954397.74)-0.19*s(357.5,35999.05)-0.11*s(186.5,966404.03)-ayan(J))}
+const nkAt=(iso,h,mi)=>Math.floor(moonSid(jd(iso,h,mi))/(360/27)),rashiAt=iso=>Math.floor(sunSid(jd(iso,13,30))/30),MC={};
+function mal(iso){if(MC[iso])return MC[iso];const m=rashiAt(iso);let n=1,p=addDays(iso,-1);while(rashiAt(p)===m){n++;p=addDays(p,-1)}
+const [y,gm]=iso.split('-').map(Number),nk=nkAt(iso,6,15),nx=nkAt(addDays(iso,1),6,15),k2=[12,18,24].map(h=>nkAt(iso,h,15)).find(x=>x!==nk&&x!==nx);
+return MC[iso]={m,day:n,month:MM[m],year:y-825+(m>=4&&gm>=8?1:0),nk,nk2:k2===undefined?-1:k2,wd:new Date(iso+'T00:00:00Z').getUTCDay()}}
+/* ---- end cal ---- */
+
+/* ---- Daily Pooja ---- */
+const poojas=()=>DB.get('poojas',[]),nkL=x=>NAK[x.nk]+(x.nk2>=0?' / '+NAK[x.nk2]:'');
+const due=(iso,l=poojas())=>{const x=mal(iso);return l.filter(p=>{const k=NAK.indexOf(p.nak);return k>=0&&(k===x.nk||k===x.nk2)&&iso>=p.start&&(p.rep==='m'||p.once===iso)})};
+const wa=()=>Object.assign({on:false,cc:'91',msg:'🙏 {temple}\nReceipt: {receipt}\nName: {name}\nPooja date: {pdate}\nVazhivad: {items}\nTotal: ₹{total} ({pay})\n{footer}'},cfg().wa||{});
+function selDate(v){if(!v)return;S.date=v;S.cal={y:+v.slice(0,4),m:+v.slice(5,7)-1};dailyView()}
+const dayGo=n=>selDate(addDays(S.date,n));
+function calGo(n){let {y,m}=S.cal;m+=n;if(m<0){m=11;y--}if(m>11){m=0;y++}S.cal={y,m};dailyView()}
+function dailyView(){const dt=S.date=S.date||td();S.cal=S.cal||{y:+dt.slice(0,4),m:+dt.slice(5,7)-1};const x=mal(dt),all=poojas(),ps=due(dt,all),{y,m}=S.cal,first=new Date(Date.UTC(y,m,1)).getUTCDay(),dim=new Date(Date.UTC(y,m+1,0)).getUTCDate(),t=td();
+let cells=WD.map(w=>`<div class=h>${w}</div>`).join('')+'<div style="visibility:hidden"></div>'.repeat(first);
+for(let d=1;d<=dim;d++){const iso=`${y}-${pad(m+1)}-${pad(d)}`,c=mal(iso),n=due(iso,all).length;cells+=`<div class="${iso===t?'t ':''}${iso===dt?'sel':''}" onclick="selDate('${iso}')">${n?`<i class=ct>${n}</i>`:''}<small>${d}</small> <b>${c.day}${c.day==1?' '+c.month:''}</b><br>${nkL(c)}</div>`}
+const a=mal(`${y}-${pad(m+1)}-01`),b=mal(`${y}-${pad(m+1)}-${pad(dim)}`),mn=new Date(Date.UTC(y,m,1)).toLocaleString('en',{month:'long',timeZone:'UTC'});
+const rows=ps.map((p,i)=>{const no=p.paid&&p.paid[dt];return `<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${esc(p.phone)}</td><td>${esc(p.nak)}</td><td>${p.items.map(q=>esc(q.name)+' ₹'+q.price).join(', ')}</td><td>₹${p.total}</td><td style="white-space:nowrap">${no?`✓ ${no} <button class="b s" onclick="printBill('${no}')">Print</button>${wa().on?` <button class="b s" onclick="waSend('${no}')">WhatsApp</button>`:''}`:`<button class="b s" onclick="payForm(${p.id},'${dt}')">Pay</button>`} <button class="b s g" onclick="delPooja(${p.id})">✕</button></td></tr>`}).join('');
+$('#main').innerHTML=`<div class=card><div class=row><button class="b s" onclick="dayGo(-1)">◀</button><input type=date value="${dt}" onchange="selDate(this.value)"><button class="b s" onclick="dayGo(1)">▶</button><button class="b s g" onclick="selDate(td())">Today</button><button class=b onclick="poojaForm()">+ Add Pooja</button></div>
+<b style="font-size:18px">${x.year} ${x.month} ${x.day} · ${WD[x.wd]} · നക്ഷത്രം: ${nkL(x)}</b></div>
+<div class=card><h3>Poojas on ${dt} (${ps.length})</h3><div style="overflow-x:auto"><table><tr><th>#</th><th>Name</th><th>Phone</th><th>Nakshatram</th><th>Vazhivad</th><th>Amount</th><th></th></tr>${rows||'<tr><td colspan=7>No poojas for this day</td></tr>'}</table></div></div>
+<div class=card><div class=row><button class="b s" onclick="calGo(-1)">◀</button><b>${mn} ${y} &nbsp;|&nbsp; ${a.month}${a.month!==b.month?' – '+b.month:''} ${a.year}</b><button class="b s" onclick="calGo(1)">▶</button></div><div class=cal>${cells}</div></div>`}
+function poojaForm(){const its=items().filter(i=>i.cat==='daily'||i.cat==='normal');
+$('#mbox').innerHTML=`<section class=fm style="text-align:left;min-width:300px;max-height:80vh;overflow:auto"><h3>Add Pooja</h3><label style="font-weight:400"><input type=checkbox id=mlOn checked style="width:auto"> മലയാളം (Manglish)</label>
+<label>Name</label><input id=pn><label>Phone</label><input id=pp type=tel><label>Nakshatram</label><select id=pk><option value="">--</option>${DB.get('nak',NAK).map(n=>`<option>${esc(n)}</option>`).join('')}</select>
+<label>Repeat</label><select id=pr><option value=m>Every month on the star day</option><option value=o>One time (next star day)</option></select><label>Vazhivad</label>
+${its.map(i=>`<label style="font-weight:400"><input type=checkbox class=pi data-n="${esc(i.name)}" data-p=${i.price} style="width:auto" onchange="pfSum()"> ${esc(i.name)} – ₹${i.price}</label>`).join('')||'<p>Admin must add Vazhivad items first</p>'}
+<div class=tot>Total ₹<span id=pt>0</span></div><button class=b onclick="savePooja()">Save</button> <button class="b g" onclick="closeM()">Cancel</button></section>`;
+$('#modal').style.display='flex';mlInput($('#pn'))}
+function pfSum(){$('#pt').textContent=[...document.querySelectorAll('.pi:checked')].reduce((a,c)=>a+ +c.dataset.p,0)}
+function savePooja(){const name=$('#pn').value.trim(),nak=$('#pk').value,its=[...document.querySelectorAll('.pi:checked')].map(c=>({name:c.dataset.n,price:+c.dataset.p}));
+if(!name||!nak||!its.length)return alert('Enter name, nakshatram and select vazhivad');
+const start=S.date>=td()?S.date:td(),p={id:Date.now(),name,phone:$('#pp').value.trim(),nak,items:its,total:its.reduce((a,q)=>a+q.price,0),start,rep:$('#pr').value,paid:{}},k=NAK.indexOf(nak);let f=start;
+for(let i=0;i<40;i++){const d=addDays(start,i),c=mal(d);if(c.nk===k||c.nk2===k){f=d;break}}
+if(p.rep==='o')p.once=f;const l=poojas();l.push(p);DB.set('poojas',l);closeM();selDate(f)}
+function delPooja(id){if(confirm('Remove this pooja booking (all future days)?')){DB.set('poojas',poojas().filter(p=>p.id!=id));dailyView()}}
+function payForm(id,dt){const p=poojas().find(x=>x.id==id),c=mal(dt);
+$('#mbox').innerHTML=`<section class=fm style="text-align:left;min-width:300px"><h3>Pay – ${esc(p.name)}</h3><div>Pooja day: ${c.month} ${c.day} (${dt}) · ${esc(p.nak)}</div><br><table>${p.items.map(q=>`<tr><td>${esc(q.name)}</td><td align=right>₹${q.price}</td></tr>`).join('')}</table>
+<div class=tot>Total: ₹${p.total}</div><div class=row>Payment: <label style="display:inline"><input type=radio name=pay value=Cash checked style="width:auto"> Cash</label><label style="display:inline"><input type=radio name=pay value=UPI style="width:auto"> UPI</label></div>
+<button class=b onclick="payPooja(${id},'${dt}')">Pay &amp; Print</button> <button class="b g" onclick="closeM()">Cancel</button></section>`;$('#modal').style.display='flex'}
+function payPooja(id,dt){const l=poojas(),p=l.find(x=>x.id==id),c=cfg(),mc=mal(dt);if(p.paid[dt])return closeM();c.cnt.daily++;DB.set('cfg',c);
+const b={no:'D'+String(c.cnt.daily).padStart(4,'0'),type:'daily',date:td(),time:new Date().toLocaleTimeString(),occ:`${mc.month} ${mc.day}, ${p.nak}`,pdate:dt,phone:p.phone,rows:p.items.map(q=>({name:p.name,nak:p.nak,item:q.name,price:q.price})),total:p.total,pay:document.querySelector('[name=pay]:checked').value,by:S.user,...ctrF(),synced:false};
+const bl=bills();bl.push(b);DB.set('bills',bl);p.paid[dt]=b.no;DB.set('poojas',l);dailyView();printBill(b.no,()=>doneM(b.no))}
+function doneM(no){const b=bills().find(x=>x.no===no);$('#mbox').innerHTML=`<h3>✅ Payment received</h3><p>Receipt <b>${no}</b> – ₹${b.total} (${b.pay})<br>Added to today's income</p>${wa().on&&b.phone?`<button class=b onclick="waSend('${no}')">WhatsApp receipt</button> `:''}<button class="b g" onclick="printBill('${no}',()=>doneM('${no}'))">Reprint</button> <button class="b g" onclick="closeM()">Close</button>`;$('#modal').style.display='flex'}
+function waSend(no){const b=bills().find(x=>x.no===no),w=wa(),c=cfg();let n=(b.phone||'').replace(/\D/g,'');if(!n)return alert('No phone number saved');if(n.length===10)n=w.cc+n;
+const v={temple:c.temple,receipt:b.no,name:b.rows[0].name,pdate:b.pdate||b.date,items:b.rows.map(r=>r.item+' ₹'+r.price).join(', '),total:b.total,pay:b.pay,date:b.date,footer:c.footer};
+open('https://wa.me/'+n+'?text='+encodeURIComponent(w.msg.replace(/\{(\w+)\}/g,(m,k)=>v[k]??m)),'_blank')}
+
+
+/* ---- Counters (admin creates; offline or online) ---- */
+const counters=()=>{let l=DB.get('counters');if(!l){l=[{id:1,no:'1',name:'Staff',pw:(cfg().pw.staff||'staff123'),mode:'online'}];DB.set('counters',l)}return l};
+const ctrF=()=>({ctr:S.ctr?S.ctr.id:0,cn:S.ctr?'Counter '+S.ctr.no:'Admin',inch:S.ctr?S.ctr.name:'Admin'});
+const myC=()=>S.ctr?{no:S.ctr.no}:{no:'Admin'};
+function countersView(){const l=counters();$('#main').innerHTML=`<div class=card><h3>Counter accounts</h3><div class=row><label style="font-weight:400"><input type=checkbox id=mlOn checked> Manglish</label><input id=cn placeholder="Counter number" style="width:130px"><input id=ci placeholder="Responsible person name" style="width:210px"><input id=cp placeholder="Password" style="width:140px"><select id=cm><option value=online>Online (website QR scan)</option><option value=offline>Offline (normal billing only)</option></select><button class=b onclick="addCtr()">Create</button></div>
+<table><tr><th>Counter No</th><th>Responsible person</th><th>Type</th><th></th></tr>${l.map(c=>`<tr><td>${esc(c.no)}</td><td>${esc(c.name)}</td><td>${c.mode}</td><td style="white-space:nowrap"><button class="b s" onclick="pwCtr(${c.id})">Change password</button> <button class="b s g" onclick="modeCtr(${c.id})">Make ${c.mode==='online'?'offline':'online'}</button> <button class="b s g" onclick="delCtr(${c.id})">Delete</button></td></tr>`).join('')}</table><p><small>Counters log in with their counter number and password. Online counters get the "Online Requests" tab to scan customer QR codes.</small></p></div>`;mlInput($('#ci'))}
+function addCtr(){const no=$('#cn').value.trim(),name=$('#ci').value.trim(),pw=$('#cp').value;if(!no||!name||!pw)return alert('Enter counter number, person name and password');if(no.toLowerCase()==='admin'||counters().some(c=>c.no===no))return alert('This counter number is already used');
+const l=counters();l.push({id:Date.now(),no,name,pw,mode:$('#cm').value});DB.set('counters',l);countersView()}
+function pwCtr(id){const p=prompt('New password');if(!p)return;const l=counters();l.find(c=>c.id===id).pw=p;DB.set('counters',l);alert('Password changed')}
+function modeCtr(id){const l=counters(),c=l.find(x=>x.id===id);c.mode=c.mode==='online'?'offline':'online';DB.set('counters',l);countersView()}
+function delCtr(id){if(confirm('Delete this counter? Its old bills stay in the records.')){DB.set('counters',counters().filter(c=>c.id!==id));countersView()}}
+function doLogin(){const u=$('#u').value.trim(),p=$('#pw').value;
+if(u.toLowerCase()==='admin'&&p===cfg().pw.admin){S.user='admin';S.ctr=null}else{const c=counters().find(x=>String(x.no)===u&&x.pw===p);if(!c)return alert('Wrong counter number or password');S.user='staff';S.ctr=c}
+S.view='normal';ONL=[];if(unsub){unsub();unsub=null}app();poll()}
+/* Bills list: admin sees all counters, a counter sees only its own */
+function billsView(){const adm=S.user==='admin';$('#main').innerHTML=`<div class=card><h3>${adm?'Bills':'My Counter Bills'}</h3><div class=row>Date: <input type=date id=fd value="${td()}" onchange="bl()">${adm?` Counter: <select id=fc onchange="bl()"><option value="">All</option>${counters().map(c=>`<option value="${c.id}">Counter ${esc(c.no)} – ${esc(c.name)}</option>`).join('')}<option value="0">Admin</option></select>`:''}<span id=bs></span></div><div style="overflow-x:auto"><table id=bt></table></div></div>`;bl()}
+function bl(){const d=$('#fd').value,adm=S.user==='admin',fc=adm?$('#fc').value:String(S.ctr.id),l=bills().filter(b=>b.date===d&&(fc===''||String(b.ctr??1)===fc)).reverse(),sum=p=>l.filter(b=>b.pay===p).reduce((a,b)=>a+b.total,0),pend=l.filter(b=>b.pay==='Pending').length;
+$('#bs').innerHTML=` | ${l.length} bills | Cash ₹${sum('Cash')} | UPI ₹${sum('UPI')} | <b>Total ₹${sum('Cash')+sum('UPI')}</b>${pend?` | <span class=err>${pend} payment pending</span>`:''}`;
+$('#bt').innerHTML='<tr><th>No</th><th>Time</th><th>Type</th><th>Entries</th><th>Total</th><th>Pay</th><th>Counter</th><th></th></tr>'+l.map(b=>`<tr><td>${b.no}</td><td>${b.time}</td><td>${NAMES[b.type]}</td><td>${b.rows.map(r=>esc(r.name)).join(', ')}</td><td>₹${b.total}</td><td>${b.pay}</td><td>${esc(b.cn||'Counter 1')}</td><td style="white-space:nowrap"><button class="b s" onclick="printBill('${b.no}')">Reprint</button>${b.pay==='Pending'?` <button class="b s g" onclick="payBill('${b.no}')">Receive payment</button>`:''}</td></tr>`).join('')}
+function payBill(no){const b=bills().find(x=>x.no===no);$('#mbox').innerHTML=`<h3>Receive payment</h3><p>${no} – <b>₹${b.total}</b></p><div class=row>Payment: <label style="display:inline"><input type=radio name=pay value=Cash checked> Cash</label> <label style="display:inline"><input type=radio name=pay value=UPI> UPI</label></div><button class=b onclick="payBillDo('${no}')">Confirm &amp; Print</button> <button class="b g" onclick="closeM()">Cancel</button>`;$('#modal').style.display='flex'}
+async function payBillDo(no){const l=bills(),b=l.find(x=>x.no===no);b.pay=document.querySelector('[name=pay]:checked').value;b.date=td();b.time=new Date().toLocaleTimeString();DB.set('bills',l);if(S.view==='bills')bl();printBill(no);
+if(b.oc){try{await ensureFB();await fdb.collection('requests').doc(b.oc).update({status:'paid',billNo:no})}catch(e){alert('Saved here, but the website was not updated: '+e.message)}}}
+
+/* ---- Online requests (Firebase Firestore + QR scan) ---- */
+const FBCFG={apiKey:"AIzaSyCEPupDR2d6sXHcoBbBYtXYxHMjHH9khoY",authDomain:"templesw.firebaseapp.com",projectId:"templesw",storageBucket:"templesw.firebasestorage.app",messagingSenderId:"979053515730",appId:"1:979053515730:web:2f1f907468d595ebbc6e0b",measurementId:"G-ES34KTYBH0"};
+let ONL=[],ONLERR='',fdb=null,unsub=null;
+const fbc=()=>Object.assign({email:'',pass:''},cfg().fb||{});
+function beep(){try{const a=new AudioContext(),o=a.createOscillator();o.connect(a.destination);o.frequency.value=880;o.start();setTimeout(()=>{o.stop();a.close()},300)}catch(e){}}
+const canOnline=()=>S.user==='admin'||(S.ctr&&S.ctr.mode==='online');
+const nw=()=>ONL.filter(r=>r.status==='new').length;
+function ob(){const e=$('#ob');if(!e)return;const n=nw();e.textContent=n||'';e.style.cssText=n?'background:#e53935;color:#fff;border-radius:9px;padding:0 6px;margin-left:4px':'display:none'}
+function fbInit(){if(fdb)return true;if(typeof firebase==='undefined')return false;try{firebase.initializeApp(FBCFG);fdb=firebase.firestore();return true}catch(e){return false}}
+async function ensureFB(force){if(!fbInit())throw new Error('No internet - Firebase could not load');const f=fbc(),a=firebase.auth();if(!f.email||!f.pass)throw new Error('Set the Firebase staff email and password in Settings');
+if(force||!a.currentUser||a.currentUser.email!==f.email)await a.signInWithEmailAndPassword(f.email,f.pass)}
+function onlineErr(){const m=$('#om');if(m&&ONLERR){m.className='err';m.style.color='';m.textContent='⚠ '+ONLERR}}
+async function poll(force){if(!S.user||!canOnline())return;if(unsub&&!force)return;
+try{await ensureFB(force);if(unsub)unsub();unsub=fdb.collection('requests').orderBy('createdAt','desc').limit(200).onSnapshot(sn=>{const before=nw();ONL=sn.docs.map(d=>{const x=d.data();return{...x,bill_no:x.billNo,created:x.createdStr||''}});if(nw()>before)beep();ob();if(S.view==='online')onlineList()},e=>{ONLERR=e.message;unsub=null;onlineErr()});ONLERR='';onlineErr()}
+catch(e){ONLERR=e.message;unsub=null;onlineErr()}}
+setInterval(()=>poll(),20000);
+/* prices always come from this software's own list, never from the customer's browser */
+const fix=r=>{const L=items(),en=r.entries.map(x=>({...x,items:x.items.map(i=>{const m=L.find(y=>String(y.id)===String(i.id));return{name:m?m.name:i.name,price:m?+m.price:+i.price}})}));return{...r,entries:en,total:en.reduce((a,x)=>a+x.items.reduce((s,i)=>s+i.price,0),0)}};
+const reqBill=r=>({type:'normal',date:r.pdate,time:'',rows:r.entries.flatMap(x=>x.items.map(i=>({name:x.name,nak:x.nak,item:i.name,price:i.price}))),total:r.total});
+function onlineView(){$('#main').innerHTML=`<div class=card><h3>Online Requests (from website)</h3><div class=row><label>Scan QR: <input id=sc placeholder="click here, then scan" style="width:230px"></label><button class="b s" onclick="poll(true)">⟳ Reconnect</button><label><input type=checkbox id=au checked> Auto-print on scan</label></div><p id=om></p><div style="overflow-x:auto" id=ol></div></div>`;
+const s=$('#sc');s.focus();s.onkeydown=e=>{if(e.key!=='Enter')return;const c=s.value.trim().toUpperCase();s.value='';if(c)claimReq(c,true)};onlineList();onlineErr();poll()}
+function onlineList(){const e=$('#ol');if(!e)return;const me=String(myC().no);e.innerHTML='<table><tr><th>Code</th><th>Pooja date</th><th>Mobile</th><th>Entries</th><th>Total</th><th>Status</th><th></th></tr>'+(ONL.map(r=>`<tr><td><b>${esc(r.code)}</b><br><small>${esc(r.created)}</small></td><td>${esc(r.pdate)}</td><td>${esc(r.mobile)}</td><td>${r.entries.map(x=>esc(x.name)+' ('+esc(x.nak)+'): '+x.items.map(i=>esc(i.name)).join(', ')).join('<br>')}</td><td>₹${r.total}</td><td>${r.status==='paid'?'Paid '+esc(r.bill_no||''):r.counter?'Counter '+esc(r.counter):'New'}</td><td style="white-space:nowrap">${r.status==='paid'?'':r.counter&&r.counter!==me?'<small>Taken by another counter</small>':`<button class="b s" onclick="claimReq('${r.code}',false)">${r.counter?'🖨 Print':'➕ Add to my list &amp; print'}</button>`}</td></tr>`).join('')||'<tr><td colspan=7>No requests yet</td></tr>')+'</table>'}
+/* Scan: lock the request to this counter, add it to this counter's bill list, then print */
+async function claimReq(c,scan){const om=$('#om'),me=String(myC().no);try{await ensureFB();const ref=fdb.collection('requests').doc(c);
+const d=await fdb.runTransaction(async t=>{const s=await t.get(ref);if(!s.exists)throw new Error('Code not found: '+c);const x=s.data();if(x.status==='paid')throw new Error('Already paid');if(x.counter&&x.counter!==me)throw new Error('Already taken by counter '+x.counter);t.update(ref,{status:'printed',counter:me});return x});
+const r=fix({...d,code:c});let b=bills().find(x=>x.oc===c);
+if(!b){const cf=cfg();cf.cnt.normal++;DB.set('cfg',cf);b={...reqBill(r),no:'V'+String(cf.cnt.normal).padStart(4,'0'),date:td(),time:new Date().toLocaleTimeString(),occ:'Online '+r.code+' · Pooja date '+r.pdate,pdate:r.pdate,phone:r.mobile,oc:c,pay:'Pending',by:S.user,...ctrF(),synced:false};const l=bills();l.push(b);DB.set('bills',l)}
+if(om){om.className='';om.style.color='#2e7d32';om.textContent='✓ '+c+' added to your list as '+b.no+' (₹'+b.total+') - payment pending'}
+const au=$('#au');if(!scan||!au||au.checked)printBill(b.no)}catch(e){if(om){om.className='err';om.style.color='';om.textContent='⚠ '+e.message}else alert(e.message)}}
+async function webPush(){try{await ensureFB(true);await fdb.collection('config').doc('shop').set({items:items().map(i=>({id:String(i.id),name:i.name,price:+i.price,cat:i.cat})),nak:DB.get('nak',NAK),updated:firebase.firestore.FieldValue.serverTimestamp()});alert('Vazhivad items and nakshatram list sent to the website');poll(true)}catch(e){alert(e.message)}}
+
+app();
+poll();
+</script></body></html>
