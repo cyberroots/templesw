@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // CHANGE THIS to the staff e-mail you create in Firebase Authentication.
+    // Only this account can read every request, claim it for a counter, and edit the vazhivad list.
+    function staff() {
+      return request.auth != null
+        && request.auth.token.email in ['counter@yourtemple.com'];
+    }
+
+    // Vazhivad items, prices and nakshatram list: everyone can read, only staff can change.
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if staff();
+    }
+
+    // Customer vazhivad requests.
+    match /requests/{code} {
+      // A signed-in customer can create a NEW request for themselves only.
+      allow create: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.status == 'new'
+        && request.resource.data.counter == null
+        && request.resource.data.total is int
+        && request.resource.data.total >= 0
+        && request.resource.data.entries.size() <= 20;
+      // Customers see only their own requests; staff see all.
+      allow read: if staff() || (request.auth != null && resource.data.uid == request.auth.uid);
+      // Only staff (counter software) can mark printed / paid.
+      allow update: if staff();
+      allow delete: if false;
+    }
+  }
+}
